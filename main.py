@@ -215,7 +215,7 @@ if __name__ == '__main__':
                         type=int, default=1)
 
     parser.add_argument('--display_interval', help='interval of display by batches',
-                        type=int, default=10)
+                        type=int, default=5)
 
     parser.add_argument('--batch', help='size of batch',
                         type=int, default=20000)
@@ -239,7 +239,7 @@ if __name__ == '__main__':
     # load train/dev/test data
     trainData = SNLIData("train", args.train, embedding)
     devData = SNLIData("dev", args.dev, embedding)
-    # testData = SNLIData("test", args.test, embedding)
+    testData = SNLIData("test", args.test, embedding)
 
     model = Model(args.embedding_size, 300, len(LABELS))
 
@@ -248,7 +248,12 @@ if __name__ == '__main__':
         model.load(args.model)
 
     losses = []
-    accuracies = []
+
+    # accuracy = model.accuracy(testData.data)
+    # logger.info("Test Accuracy: " + str(accuracy))
+
+    # accuracy = model.accuracy(trainData.data[:10000])
+    # logger.info("Train Accuracy: " + str(accuracy))
 
     loss = tagged = 0
     for EPOCH in range(args.epochs):
@@ -267,7 +272,6 @@ if __name__ == '__main__':
 
                 accuracy = model.accuracy(devData.data)
                 logger.info("Dev Accuracy: " + str(accuracy))
-                accuracies.append(accuracy)
 
                 model.save(args.model)
 

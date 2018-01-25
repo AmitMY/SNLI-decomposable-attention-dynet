@@ -1,6 +1,6 @@
 # SNLI Decomposable Attention DyNet
 
-This is a DyNet implementation fo decomposable attention for SNLI ported from the [PyTortch Implementation](https://github.com/libowen2121/SNLI-decomposable-attention),
+This is a DyNet implementation fo decomposable attention for SNLI partially based on the [PyTortch Implementation](https://github.com/libowen2121/SNLI-decomposable-attention),
 of [this article](https://arxiv.org/abs/1606.01933).
 
 ## Usage
@@ -11,9 +11,9 @@ To use the code, run `main.py` with arguments of:
 - dev: dev file
 - test: test file
 
+So for example:
+```bash
+python main.py --w2v=deps.words --train=../snli_1.0/snli_1.0_train.jsonl --dev=../snli_1.0/snli_1.0_traindev.jsonl --test=../snli_1.0/snli_1.0_test.jsonl
+```
+
 You can find the train, dev, and test files in the [stanford database](https://nlp.stanford.edu/projects/snli/)
-
-## Notes
-
-- The code does not currently using actual batches.
-- The code is still not working to 86%, but gets to 74.8%. (after like 8 epochs)
