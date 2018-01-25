@@ -4,6 +4,7 @@ import json
 import random
 import numpy as np
 import dynet as dy
+from pathlib import Path
 
 # create logger
 logger = logging.getLogger("mylog")
@@ -22,8 +23,16 @@ class Embedding:
         logger.info("Creating UNK vector")
         self.UNK = self.createUNKVector()
 
+        self.knownCounter = 0
+        self.unknownCounter = 0
+
     def embedWord(self, word):
-        return self.words[word] if word in self.words else self.UNK
+        if word in self.words:
+            self.knownCounter += 1
+            return self.words[word]
+
+        self.unknownCounter += 1
+        return self.UNK
 
     def embedWords(self, words):
         return np.array(map(self.embedWord, words))
@@ -67,12 +76,13 @@ class SNLIData:
                 gold = datum["gold_label"]
                 if gold != u"-":
                     label = LABELS[gold]
-                    sentence1 = embedding.embedWords(datum["sentence1"].lower().split())
-                    sentence2 = embedding.embedWords(datum["sentence2"].lower().split())
+                    sentence1 = embedding.embedWords(datum["sentence1"].lower().rstrip(".").split())
+                    sentence2 = embedding.embedWords(datum["sentence2"].lower().rstrip(".").split())
 
                     self.data.append((sentence1, sentence2, label))
 
         logger.info(type + " size # sent " + str(len(self.data)))
+        logger.info("Known words " + str(embedding.knownCounter) + " / Unknown words " + str(embedding.unknownCounter))
 
 
 class Model:
@@ -96,7 +106,7 @@ class Model:
     def predict(self, data):
         return [self.forward(s1, s2) for (s1, s2, label) in data]
 
-    def accuracy(self, data):
+    def  accuracy(self, data):
         good = total = 0.0
         predicted = self.predict(data)
         golds = [label for (s1, s2, label) in data]
@@ -161,7 +171,8 @@ class Model:
 
         # Final layer
         finalLayer = dy.parameter(self.finaLinear)
-        final = dy.softmax(dy.transpose(Hsent * finalLayer))
+        # final = dy.softmax(dy.transpose(Hsent * finalLayer))
+        final = dy.transpose(Hsent * finalLayer)
 
         if label != None:  # Label can be 0...
             return dy.pickneglogsoftmax(final, label)
@@ -203,14 +214,20 @@ if __name__ == '__main__':
     parser.add_argument('--dev_interval', help='interval for development',
                         type=int, default=1)
 
-    parser.add_argument('--display_interval', help='interval of display',
-                        type=int, default=10000)
+    parser.add_argument('--display_interval', help='interval of display by batches',
+                        type=int, default=10)
 
     parser.add_argument('--batch', help='size of batch',
-                        type=int, default=100)
+                        type=int, default=20000)
 
     parser.add_argument('--model', help='path of model file (not include the name suffix',
                         type=str, default='model.save')
+
+    parser.add_argument('--dynet-autobatch', help='dynet parameter',
+                        type=int, default=1)
+
+    parser.add_argument('--dynet-mem', help='dynet parameter',
+                        type=int, default=8192)
 
     args = parser.parse_args()
 
@@ -224,7 +241,11 @@ if __name__ == '__main__':
     devData = SNLIData("dev", args.dev, embedding)
     # testData = SNLIData("test", args.test, embedding)
 
-    model = Model(args.embedding_size, args.embedding_size, len(LABELS))
+    model = Model(args.embedding_size, 300, len(LABELS))
+
+    modelFileCache = Path(args.model)
+    if modelFileCache.is_file():
+        model.load(args.model)
 
     losses = []
     accuracies = []
@@ -238,18 +259,21 @@ if __name__ == '__main__':
         errors = []
         dy.renew_cg()
         for i, (s1, s2, label) in enumerate(trainData.data, 1):
-            if i % args.display_interval == 0:
-                losses.append(loss / tagged)
-                logger.info(str(EPOCH) + "/" + str(i) + ": " + str(loss / tagged))
+            if i % (args.batch * args.display_interval) == 0:
+                avgLoss = loss / tagged
+                losses.append(avgLoss)
+                logger.info(str(EPOCH) + "/" + str(i) + ": " + str(avgLoss))
                 loss = tagged = 0
 
-                accuracy = model.accuracy(devData.data[:1000])
+                accuracy = model.accuracy(devData.data)
                 logger.info("Dev Accuracy: " + str(accuracy))
                 accuracies.append(accuracy)
 
+                model.save(args.model)
+
             if i % args.batch == 0:
                 errorsSum = dy.esum(errors)
-                loss += errorsSum.scalar_value()
+                loss += errorsSum.value()
                 tagged += args.batch
 
                 errorsSum.backward()
@@ -259,5 +283,3 @@ if __name__ == '__main__':
                 errors = []
 
             errors.append(model.forward(s1, s2, label))
-
-    model.save(args.model)
